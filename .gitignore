@@ -23,6 +23,9 @@ v# Created by https://www.toptal.com/developers/gitignore/api/java,visualstudio,
 # Log file
 *.log
 
+# Documentation files (excluded from version control)
+*.ot
+
 # BlueJ files
 *.ctxt
 

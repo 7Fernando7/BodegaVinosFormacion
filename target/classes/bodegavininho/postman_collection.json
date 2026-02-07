@@ -1,0 +1,153 @@
+{
+  "info": {
+    "name": "Bodega Vininho API",
+    "description": "API para gestión de vinos",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get all wines",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8080/api/wines",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines"]
+        }
+      }
+    },
+    {
+      "name": "Get wine by id",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8080/api/wines/{{id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines", "{{id}}"]
+        }
+      }
+    },
+    {
+      "name": "Search wine by name",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "http://localhost:8080/api/wines/search?name={{name}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines", "search"],
+          "query": [
+            {
+              "key": "name",
+              "value": "{{name}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create wine",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"El Coto\",\n  \"year\": 2020,\n  \"price\": 15.99,\n  \"stock\": 25,\n  \"type\": \"RED\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/wines",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines"]
+        }
+      }
+    },
+    {
+      "name": "Update stock",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "http://localhost:8080/api/wines/{{id}}/stock?quantity={{quantity}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines", "{{id}}", "stock"],
+          "query": [
+            {
+              "key": "quantity",
+              "value": "{{quantity}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete wine",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "http://localhost:8080/api/wines/{{id}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines", "{{id}}"]
+        }
+      }
+    },
+    {
+      "name": "Import external wines",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "http://localhost:8080/api/wines/import",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines", "import"]
+        }
+      }
+    },
+    {
+      "name": "Import wine by barcode",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "http://localhost:8080/api/wines/import/barcode/{{barcode}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "wines", "import", "barcode", "{{barcode}}"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "id",
+      "value": "1"
+    },
+    {
+      "key": "name",
+      "value": "El Coto"
+    },
+    {
+      "key": "quantity",
+      "value": "10"
+    },
+    {
+      "key": "barcode",
+      "value": "8410313012345"
+    }
+  ]
+}
