@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * Caso de uso para importar vinos desde fuentes externas.
+ * Separa responsabilidades: preview (solo lectura) vs import (persistencia).
  */
 public class ImportExternalWinesUseCase {
     
@@ -25,6 +26,47 @@ public class ImportExternalWinesUseCase {
         this.wineRepository = wineRepository;
     }
     
+    // ==================== PREVIEW (Solo Lectura) ====================
+    
+    /**
+     * Previsualiza vinos desde la fuente externa sin modificar estado del sistema.
+     * @return Lista de vinos disponibles externamente
+     */
+    public List<WineDTO> previewExternalWines() {
+        logger.info("Previsualizando vinos desde fuente externa...");
+        List<Wine> externalWines = externalWineProvider.fetchWines();
+        
+        logger.info("Se encontraron {} vinos externos", externalWines.size());
+        
+        return externalWines.stream()
+            .map(WineDTO::fromDomain)
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * Previsualiza un vino por código de barras sin modificar estado del sistema.
+     * @param barcode Código de barras del producto
+     * @return WineDTO del vino encontrado o null
+     */
+    public WineDTO previewByBarcode(String barcode) {
+        logger.info("Previsualizando vino por código de barras: {}", barcode);
+        Wine wine = externalWineProvider.fetchByBarcode(barcode);
+        
+        if (wine != null) {
+            logger.info("Vino encontrado: {}", wine.getName());
+            return WineDTO.fromDomain(wine);
+        }
+        
+        logger.warn("No se encontró vino con código de barras: {}", barcode);
+        return null;
+    }
+    
+    // ==================== IMPORT (Persistencia) ====================
+    
+    /**
+     * Importa y guarda todos los vinos desde la fuente externa.
+     * @return Lista de vinos importados y guardados
+     */
     public List<WineDTO> importAllWines() {
         logger.info("Importando vinos desde fuente externa...");
         List<Wine> externalWines = externalWineProvider.fetchWines();
@@ -42,8 +84,13 @@ public class ImportExternalWinesUseCase {
             .collect(Collectors.toList());
     }
     
+    /**
+     * Importa y guarda un vino por código de barras.
+     * @param barcode Código de barras del producto
+     * @return WineDTO del vino importado o null si no existe
+     */
     public WineDTO importByBarcode(String barcode) {
-        logger.info("Buscando vino por código de barras: {}", barcode);
+        logger.info("Importando vino por código de barras: {}", barcode);
         Wine wine = externalWineProvider.fetchByBarcode(barcode);
         
         if (wine != null) {
