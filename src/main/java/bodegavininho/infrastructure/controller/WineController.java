@@ -4,6 +4,9 @@ import bodegavininho.application.dto.CreateWineRequest;
 import bodegavininho.application.dto.WineDTO;
 import bodegavininho.application.usecase.ImportExternalWinesUseCase;
 import bodegavininho.application.usecase.WineUseCase;
+import bodegavininho.domain.port.ExternalWineProvider;
+import bodegavininho.infrastructure.adapter.FileWineProvider;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -18,6 +21,7 @@ import java.util.List;
  * - /api/wines      : CRUD de vinos internos
  * - /api/wines/external : Vista previa de vinos externos (sin persistir)
  * - /api/wines/import   : Importación de vinos externos (con persistencia)
+ * - /api/wines/file      : Lectura desde archivo local
  */
 @RestController
 @RequestMapping("/api/wines")
@@ -59,7 +63,7 @@ public class WineController {
     }
     
     @PostMapping
-    public ResponseEntity<WineDTO> createWine(@RequestBody CreateWineRequest request) {
+    public ResponseEntity<WineDTO> createWine(@Valid @RequestBody CreateWineRequest request) {
         logger.info("POST /api/wines - Creando vino: {}", request.name());
         WineDTO createdWine = wineUseCase.createWine(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdWine);
@@ -140,5 +144,33 @@ public class WineController {
             return ResponseEntity.ok(importedWine);
         }
         return ResponseEntity.notFound().build();
+    }
+    
+    // ==================== ARCHIVO LOCAL (File I/O) ====================
+    
+    /**
+     * Lee vinos desde un archivo local (CSV).
+     * GET /api/wines/file?path=ruta/al/archivo.csv
+     * Ejemplo: GET /api/wines/file?path=src/main/resources/wines.csv
+     */
+    @GetMapping("/file")
+    public ResponseEntity<List<WineDTO>> readWinesFromFile(@RequestParam String path) {
+        logger.info("GET /api/wines/file?path={}", path);
+        
+        try {
+            // Crear el adapter de archivo (infraestructura)
+            ExternalWineProvider fileProvider = new FileWineProvider(path);
+            
+            // Usar el método de preview para solo leer
+            List<WineDTO> wines = fileProvider.fetchWines().stream()
+                .map(WineDTO::fromDomain)
+                .toList();
+            
+            return ResponseEntity.ok(wines);
+            
+        } catch (Exception e) {
+            logger.error("Error al leer archivo: {}", path, e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 }

@@ -17,12 +17,17 @@ import java.util.regex.Pattern;
 /**
  * Adaptador para consumir la API de Open Food Facts.
  * https://world.openfoodfacts.org/
+ * Usa HttpURLConnection con timeout básico.
  */
 public class OpenFoodFactsWineAdapter implements ExternalWineProvider {
     
     private static final Logger logger = LoggerFactory.getLogger(OpenFoodFactsWineAdapter.class);
     private static final String BASE_URL = "https://world.openfoodfacts.org/cgi/search.pl";
     private static final String PRODUCT_URL = "https://world.openfoodfacts.org/api/v0/product/";
+    
+    // Timeout básico: 5 segundos de conexión y lectura
+    private static final int CONNECT_TIMEOUT = 5000; // 5 segundos
+    private static final int READ_TIMEOUT = 5000;    // 5 segundos
     
     @Override
     public List<Wine> fetchWines() {
@@ -85,12 +90,23 @@ public class OpenFoodFactsWineAdapter implements ExternalWineProvider {
         return wines;
     }
     
+    /**
+     * Hace una petición HTTP GET con timeout.
+     * @param urlStr URL a consultar
+     * @return Respuesta como String
+     */
     private String makeRequest(String urlStr) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setRequestProperty("User-Agent", "VinoApp/1.0");
         
+        // Configurar timeout (solo disponible en Java 13+)
+        // Para versiones anteriores, usar: conn.setConnectTimeout(CONNECT_TIMEOUT);
+        conn.setConnectTimeout(CONNECT_TIMEOUT);
+        conn.setReadTimeout(READ_TIMEOUT);
+        
+        // try-with-resources: cierra el BufferedReader automáticamente
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(conn.getInputStream()))) {
             StringBuilder response = new StringBuilder();
@@ -100,7 +116,7 @@ public class OpenFoodFactsWineAdapter implements ExternalWineProvider {
             }
             return response.toString();
         } finally {
-            conn.disconnect();
+            conn.disconnect(); // Siempre cerramos la conexión
         }
     }
     

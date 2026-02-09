@@ -1,0 +1,11 @@
+# Formato: nombre,año,precio,stock,país,tipo
+# Tipos válidos: RED, WHITE, ROSE
+nombre,año,precio,stock,país,tipo
+Cabernet Sauvignon,2020,25.99,100,Chile,RED
+Merlot,2019,19.99,75,Francia,RED
+Chardonnay,2021,22.50,50,Francia,WHITE
+Sauvignon Blanc,2022,18.00,80,Nueva Zelanda,WHITE
+Pinot Noir,2018,35.00,30,Borgoña,RED
+Rosé de Provence,2023,15.99,120,Francia,ROSE
+Malbec,2021,28.00,90,Argentina,RED
+Tempranillo,2020,21.50,60,España,RED

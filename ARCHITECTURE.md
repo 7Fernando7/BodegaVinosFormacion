@@ -152,8 +152,8 @@ Se ha separado la responsabilidad de **previsualización** (lectura) e **importa
 |------|----------|-------------|------------------|
 | GET | `/api/wines/external` | Lista vinos externos | ❌ Ninguno |
 | GET | `/api/wines/external/barcode/{barcode}` | Detalle vino externo | ❌ Ninguno |
-| POST | `/api/wines/import` | Importa todos los vinos | ✅ Guarda en DB |
-| POST | `/api/wines/import/barcode/{barcode}` | Importa un vino por código | ✅ Guarda en DB |
+| POST | `/api/wines/import` | Importa todos los vinos | ✅ Guarda en el repositorio interno |
+| POST | `/api/wines/import/barcode/{barcode}` | Importa un vino por código | ✅ Guarda en el repositorio interno |
 
 ### Firmas de los Nuevos Métodos
 
@@ -329,3 +329,279 @@ public ResponseEntity<WineDTO> importWineByBarcode(@PathVariable String barcode)
 ---
 
 *Documento generado automáticamente - BodegaVinosFormacion v1.0*
+
+---
+
+---
+
+# 📚 APÉNDICE: Mejoras Didácticas Implementadas
+
+## 1️⃣ Optional - Uso Correcto
+
+### Regla Principal
+- **SÍ** usar Optional en métodos de **repositorio** y **use cases** (retornos)
+- **NO** usar Optional como atributo de clase ni en **DTOs**
+
+### Ejemplo en Repository
+```java
+public interface WineRepository {
+    // Optional indica que puede o no haber resultado
+    Optional<Wine> findById(String id);
+    Optional<Wine> findByName(String name);
+}
+```
+
+### Ejemplo en Use Case
+```java
+public Optional<WineDTO> getWineById(String id) {
+    // map transforma el valor si existe
+    return wineRepository.findById(id)
+        .map(WineDTO::fromDomain);
+}
+
+public WineDTO createWine(CreateWineRequest request) {
+    // Uso explícito de Optional para verificar existencia antes de crear
+    Optional<Wine> existingWine = wineRepository.findByName(request.name());
+    if (existingWine.isPresent()) {
+        throw new IllegalArgumentException("Ya existe un vino con ese nombre");
+    }
+    
+    // El tipo viene directamente como enum (gracias al DTO con Wine.WineType)
+    Wine wine = Wine.create(
+        request.name(),
+        request.year(),
+        request.price(),
+        request.stock(),
+        request.country(),
+        request.type()  // Ya es Wine.WineType
+    );
+    
+    return WineDTO.fromDomain(wineRepository.save(wine));
+}
+```
+
+### Por Qué No en DTOs
+```java
+// ❌ MAL - DTOs deben ser simples, no nullable
+public record WineDTO(
+    Optional<String> id,  // No hacer esto
+    String name
+) {}
+
+// ✅ BIEN - DTOs simples con records
+public record WineDTO(
+    String id,   // null si no existe, más simple
+    String name
+) {}
+```
+
+---
+
+## 2️⃣ Validaciones con Bean Validation
+
+### Dependencia (ya en pom.xml)
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-validation</artifactId>
+</dependency>
+```
+
+### DTO con Enum Directo
+
+**Mejora**: Usar el enum `Wine.WineType` directamente en el DTO evita conversiones manuales.
+
+```java
+import bodegavininho.domain.model.Wine;
+
+public record CreateWineRequest(
+    @NotBlank(message = "El nombre no puede estar vacío")
+    String name,
+    
+    @Min(value = 1900, message = "El año debe ser >= 1900")
+    Integer year,
+    
+    @Positive(message = "El precio debe ser positivo")
+    Double price,
+    
+    @Min(value = 0, message = "El stock no puede ser negativo")
+    Integer stock,
+    
+    String country,
+    
+    @NotNull(message = "El tipo es obligatorio")
+    Wine.WineType type  // Enum directo, Spring convierte automáticamente
+) {}
+```
+
+**Beneficio**:
+- Spring Boot convierte automáticamente el String JSON al enum
+- Si el valor es inválido, Spring devuelve error 400 automáticamente
+- No necesitamos try-catch con `valueOf()` en el Use Case
+
+### Controlador con @Valid
+```java
+@PostMapping
+public ResponseEntity<WineDTO> createWine(@Valid @RequestBody CreateWineRequest request) {
+    // Si la validación falla, Spring devuelve 400 automáticamente
+    WineDTO createdWine = wineUseCase.createWine(request);
+    return ResponseEntity.status(HttpStatus.CREATED).body(createdWine);
+}
+```
+
+### Anotaciones Comunes
+| Anotación | Descripción | Ejemplo |
+|-----------|-------------|---------|
+| `@NotNull` | No puede ser null | `@NotNull String name` |
+| `@NotBlank` | No puede ser vacío (trim) | `@NotBlank String name` |
+| `@Positive` | Debe ser > 0 | `@Positive Double price` |
+| `@PositiveOrZero` | Debe ser >= 0 | `@PositiveOrZero Integer stock` |
+| `@Min` | Valor mínimo | `@Min(1900) Integer year` |
+| `@Max` | Valor máximo | `@Max(2024) Integer year` |
+| `@Size` | Tamaño de texto/colección | `@Size(min=2, max=50) String name` |
+| `@Email` | Formato email válido | `@Email String email` |
+| `@Pattern` | Expresión regular | `@Pattern(regexp="[A-Z]+") String code` |
+
+---
+
+## 3️⃣ File I/O - Lectura de Archivos
+
+### Nuevo Componente: FileWineProvider
+
+**Archivo**: [`FileWineProvider.java`](src/main/java/bodegavininho/infrastructure/adapter/FileWineProvider.java)
+
+**Propósito**: Lee vinos desde un archivo CSV local.
+
+**Formato del archivo CSV**:
+```csv
+nombre,año,precio,stock,país,tipo
+Cabernet Sauvignon,2020,25.99,100,Chile,RED
+Merlot,2019,19.99,75,Francia,RED
+```
+
+**Endpoint de prueba** (solo fines didácticos):
+> **NOTA**: Este endpoint existe SOLO para demostrar el concepto de File I/O.
+> En un proyecto real, la lectura de archivos se haría de forma diferente.
+```http
+GET /api/wines/file?path=src/main/resources/wines.csv
+```
+
+### Conceptos Clave de File I/O
+
+**BufferedReader + try-with-resources:**
+```java
+// try-with-resources cierra el recurso automáticamente
+try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+    String line;
+    while ((line = reader.readLine()) != null) {
+        // Procesar cada línea
+    }
+} catch (IOException e) {
+    logger.error("Error al leer archivo", e);
+}
+```
+
+**Concepto**: `try-with-resources` garantiza que el recurso se cierre, incluso si hay excepciones.
+
+**Parsing de CSV:**
+```java
+String[] parts = line.split(",");  // Separar por coma
+String name = parts[0].trim();     // Eliminar espacios
+int year = Integer.parseInt(parts[1].trim());  // Convertir a número
+```
+
+**Errores comunes a manejar:**
+- `NumberFormatException` - cuando el número no es válido
+- `ArrayIndexOutOfBoundsException` - cuando faltan campos
+- `IllegalArgumentException` - cuando el tipo no es válido
+
+---
+
+## 4️⃣ HTTP Client - Acceso a Red
+
+### OpenFoodFactsWineAdapter (Mejorado)
+
+**Archivo**: [`OpenFoodFactsWineAdapter.java`](src/main/java/bodegavininho/infrastructure/adapter/OpenFoodFactsWineAdapter.java)
+
+**Timeouts configurados:**
+```java
+private static final int CONNECT_TIMEOUT = 5000;  // 5 segundos
+private static final int READ_TIMEOUT = 5000;     // 5 segundos
+```
+
+**Petición HTTP con HttpURLConnection:**
+```java
+URL url = new URL(urlStr);
+HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+conn.setRequestMethod("GET");
+conn.setConnectTimeout(CONNECT_TIMEOUT);
+conn.setReadTimeout(READ_TIMEOUT);
+
+// Leer respuesta
+try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(conn.getInputStream()))) {
+    // ... procesar respuesta
+} finally {
+    conn.disconnect();  // Siempre cerrar la conexión
+}
+```
+
+### Conceptos Clave de HTTP
+
+**Timeouts:**
+- `ConnectTimeout`: Tiempo máximo para establecer conexión
+- `ReadTimeout`: Tiempo máximo para esperar datos
+
+**Métodos HTTP comunes:**
+| Método | Descripción | Idempotente |
+|--------|-------------|-------------|
+| GET | Obtener recursos | ✅ Sí |
+| POST | Crear recursos | ❌ No |
+| PUT | Actualizar recursos | ✅ Sí |
+| DELETE | Eliminar recursos | ✅ Sí |
+
+**Códigos de respuesta HTTP:**
+| Código | Significado |
+|--------|-------------|
+| 200 | OK - Solicitud exitosa |
+| 201 | Created - Recurso creado |
+| 400 | Bad Request - Solicitud inválida |
+| 404 | Not Found - Recurso no existe |
+| 500 | Internal Server Error - Error del servidor |
+
+---
+
+## 📁 Resumen de Archivos Modificados/Creados
+
+| Archivo | Tipo | Descripción |
+|---------|------|-------------|
+| `CreateWineRequest.java` | Modificado | Usa enum Wine.WineType directamente + validaciones |
+| `WineUseCase.java` | Modificado | Validación de duplicados con Optional explícito |
+| `WineController.java` | Modificado | Añadido @Valid y endpoint /file |
+| `OpenFoodFactsWineAdapter.java` | Modificado | Añadido timeout básico |
+| `FileWineProvider.java` | Nuevo | Adaptador para lectura de CSV |
+| `wines.csv` | Nuevo | Archivo de ejemplo con vinos |
+
+---
+
+## 🎯 Checklist de Mejores Prácticas
+
+- [ ] Optional usado solo en retornos de repositorio/use case
+- [ ] DTOs simples (sin Optional como atributos)
+- [ ] Enums usados directamente en DTOs cuando corresponde
+- [ ] @Valid en endpoints POST/PUT
+- [ ] Try-with-resources para archivos y conexiones
+- [ ] Timeouts configurados en acceso a red
+- [ ] Logging apropiado (info, debug, error)
+- [ ] Excepciones manejadas apropiadamente
+
+---
+
+## 🎓 Conceptos Aprendidos
+
+| Concepto | Ejemplo |
+|----------|---------|
+| Optional explícito | `if (opt.isPresent())` |
+| Uso de enums en DTOs | `Wine.WineType type` en record |
+| Validación temprana | Check antes de acceder a BD |
+| Excepciones con mensaje | Ayudan al debug y al usuario |
