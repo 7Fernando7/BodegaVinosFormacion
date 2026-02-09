@@ -90,10 +90,10 @@ public class FileWineProvider implements ExternalWineProvider {
     private Wine parseLine(String line) {
         try {
             // Separar por coma
-            String[] parts = line.split(\",\");
+            String[] parts = line.split(",");
             
             if (parts.length < 6) {
-                logger.warn(\"Línea inválida (menos de 6 campos): {}\", line);
+                logger.warn("Línea inválida (menos de 6 campos): {}", line);
                 return null;
             }
             
@@ -107,10 +107,10 @@ public class FileWineProvider implements ExternalWineProvider {
             return Wine.create(name, year, price, stock, country, type);
             
         } catch (NumberFormatException e) {
-            logger.warn(\"Error al parsear línea (número inválido): {}\", line);
+            logger.warn("Error al parsear línea (número inválido): {}", line);
             return null;
         } catch (IllegalArgumentException e) {
-            logger.warn(\"Error al parsear línea (tipo inválido): {}\", line);
+            logger.warn("Error al parsear línea (tipo inválido): {}", line);
             return null;
         }
     }

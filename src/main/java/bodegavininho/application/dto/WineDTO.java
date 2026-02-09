@@ -24,8 +24,8 @@ public record WineDTO(
             wine.getPrice(),
             wine.getStock(),
             wine.getCountry(),
-            wine.getType().name(),
-            wine.getType().getDisplayName()
+            wine.getType() != null ? wine.getType().name() : null,
+            wine.getType() != null ? wine.getType().getDisplayName() : null
         );
     }
     

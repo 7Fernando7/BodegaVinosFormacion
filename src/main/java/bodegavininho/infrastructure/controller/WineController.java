@@ -4,8 +4,6 @@ import bodegavininho.application.dto.CreateWineRequest;
 import bodegavininho.application.dto.WineDTO;
 import bodegavininho.application.usecase.ImportExternalWinesUseCase;
 import bodegavininho.application.usecase.WineUseCase;
-import bodegavininho.domain.port.ExternalWineProvider;
-import bodegavininho.infrastructure.adapter.FileWineProvider;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,160 +15,153 @@ import java.util.List;
 
 /**
  * Controlador REST para la gestión de vinos.
- * Endpoints:
- * - /api/wines      : CRUD de vinos internos
- * - /api/wines/external : Vista previa de vinos externos (sin persistir)
- * - /api/wines/import   : Importación de vinos externos (con persistencia)
- * - /api/wines/file      : Lectura desde archivo local
+ *
+ * ARQUITECTURA: Este controller solo orquesta llamadas a los Use Cases.
+ * No contiene lógica de negocio, solo mapeo de HTTP a domain/application.
+ *
+ * RUTAS: Se usan prefijos explícitos para evitar conflictos de routing.
+ * El patrón "/{id}" genérico causa errores 500 porque Spring lo interpreta
+ * antes que rutas más específicas como /search o /external.
  */
 @RestController
 @RequestMapping("/api/wines")
 public class WineController {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(WineController.class);
-    
+
     private final WineUseCase wineUseCase;
     private final ImportExternalWinesUseCase importExternalWinesUseCase;
-    
-    public WineController(WineUseCase wineUseCase, ImportExternalWinesUseCase importExternalWinesUseCase) {
+
+    public WineController(
+            WineUseCase wineUseCase,
+            ImportExternalWinesUseCase importExternalWinesUseCase
+    ) {
         this.wineUseCase = wineUseCase;
         this.importExternalWinesUseCase = importExternalWinesUseCase;
     }
-    
-    // ==================== VINOS INTERNOS (CRUD) ====================
-    
+
+    // ================================
+    // ENDPOINTS DE LECTURA (READ)
+    // ================================
+
+    /**
+     * Lista todos los vinos.
+     * Ruta: GET /api/wines
+     */
     @GetMapping
     public ResponseEntity<List<WineDTO>> getAllWines() {
-        logger.info("GET /api/wines");
-        List<WineDTO> wines = wineUseCase.getAllWines();
-        return ResponseEntity.ok(wines);
+        logger.info("GET /api/wines - Listando todos los vinos");
+        return ResponseEntity.ok(wineUseCase.getAllWines());
     }
-    
-    @GetMapping("/{id}")
+
+    /**
+     * Busca un vino por su ID.
+     * Ruta: GET /api/wines/by-id/{id}
+     *
+     * NOTA: Usamos "by-id" explícito para evitar conflictos.
+     * Si usáramos "/{id}" genérico, Spring lo interpretaría antes
+     * que rutas como "/search" o "/external", causando errores 500.
+     */
+    @GetMapping("/by-id/{id}")
     public ResponseEntity<WineDTO> getWineById(@PathVariable String id) {
-        logger.info("GET /api/wines/{}", id);
+        logger.info("GET /api/wines/by-id/{}", id);
         return wineUseCase.getWineById(id)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
-    
-    @GetMapping("/search")
+
+    /**
+     * Busca un vino por nombre (búsqueda exacta).
+     * Ruta: GET /api/wines/by-name?name={nombre}
+     *
+     * @param name Nombre del vino a buscar
+     */
+    @GetMapping("/by-name")
     public ResponseEntity<WineDTO> getWineByName(@RequestParam String name) {
-        logger.info("GET /api/wines/search?name={}", name);
+        logger.info("GET /api/wines/by-name?name={}", name);
         return wineUseCase.getWineByName(name)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
-    
+
+    // ================================
+    // ENDPOINTS DE ESCRITURA (WRITE)
+    // ================================
+
+    /**
+     * Crea un nuevo vino.
+     * Ruta: POST /api/wines
+     *
+     * @param request DTO con los datos del vino a crear
+     * @return 201 Created con el vino creado
+     */
     @PostMapping
-    public ResponseEntity<WineDTO> createWine(@Valid @RequestBody CreateWineRequest request) {
+    public ResponseEntity<WineDTO> createWine(
+            @Valid @RequestBody CreateWineRequest request
+    ) {
         logger.info("POST /api/wines - Creando vino: {}", request.name());
         WineDTO createdWine = wineUseCase.createWine(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdWine);
     }
-    
+
+    /**
+     * Actualiza el stock de un vino.
+     * Ruta: PUT /api/wines/{id}/stock?quantity={cantidad}
+     *
+     * @param id       ID del vino
+     * @param quantity Nueva cantidad de stock
+     * @return El vino con el stock actualizado
+     */
     @PutMapping("/{id}/stock")
     public ResponseEntity<WineDTO> updateStock(
-            @PathVariable String id, 
-            @RequestParam int quantity) {
-        logger.info("PUT /api/wines/{}/stock - Actualizando a: {}", id, quantity);
-        try {
-            WineDTO updatedWine = wineUseCase.updateStock(id, quantity);
-            return ResponseEntity.ok(updatedWine);
-        } catch (Exception e) {
-            logger.error("Error al actualizar stock", e);
-            return ResponseEntity.notFound().build();
-        }
+            @PathVariable String id,
+            @RequestParam int quantity
+    ) {
+        logger.info("PUT /api/wines/{}/stock?quantity={}", id, quantity);
+        WineDTO updatedWine = wineUseCase.updateStock(id, quantity);
+        // Si el vino no existe, updateStock lanza excepción
+        return ResponseEntity.ok(updatedWine);
     }
-    
+
+    /**
+     * Elimina un vino por ID.
+     * Ruta: DELETE /api/wines/{id}
+     *
+     * @param id ID del vino a eliminar
+     * @return 204 No Content
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteWine(@PathVariable String id) {
         logger.info("DELETE /api/wines/{}", id);
         wineUseCase.deleteWine(id);
         return ResponseEntity.noContent().build();
     }
-    
-    // ==================== VINOS EXTERNOS (PREVIEW - Solo Lectura) ====================
-    
+
+    // ================================
+    // ENDPOINTS EXTERNOS (EXTERNAL)
+    // ================================
+
     /**
-     * Previsualiza vinos desde la fuente externa sin modificar estado del sistema.
-     * GET /api/wines/external
+     * Previsualiza vinos desde fuente externa (solo lectura, no guarda).
+     * Ruta: GET /api/wines/external
+     *
+     * Útil para ver qué vinos hay disponibles antes de importar.
      */
     @GetMapping("/external")
     public ResponseEntity<List<WineDTO>> previewExternalWines() {
         logger.info("GET /api/wines/external - Previsualizando vinos externos");
-        List<WineDTO> externalWines = importExternalWinesUseCase.previewExternalWines();
-        return ResponseEntity.ok(externalWines);
+        return ResponseEntity.ok(importExternalWinesUseCase.previewExternalWines());
     }
-    
-    /**
-     * Previsualiza un vino por código de barras sin modificar estado del sistema.
-     * GET /api/wines/external/barcode/{barcode}
-     */
-    @GetMapping("/external/barcode/{barcode}")
-    public ResponseEntity<WineDTO> previewWineByBarcode(@PathVariable String barcode) {
-        logger.info("GET /api/wines/external/barcode/{} - Previsualizando vino", barcode);
-        WineDTO wine = importExternalWinesUseCase.previewByBarcode(barcode);
-        
-        if (wine != null) {
-            return ResponseEntity.ok(wine);
-        }
-        return ResponseEntity.notFound().build();
-    }
-    
-    // ==================== IMPORTACIÓN (Persistencia) ====================
-    
+
     /**
      * Importa y guarda todos los vinos desde la fuente externa.
-     * POST /api/wines/import
+     * Ruta: POST /api/wines/import
+     *
+     * WARNING: Esta operación puede ser lenta y traer muchos datos.
      */
     @PostMapping("/import")
     public ResponseEntity<List<WineDTO>> importExternalWines() {
-        logger.info("POST /api/wines/import - Importando vinos externos");
-        List<WineDTO> importedWines = importExternalWinesUseCase.importAllWines();
-        return ResponseEntity.ok(importedWines);
-    }
-    
-    /**
-     * Importa y guarda un vino por código de barras.
-     * POST /api/wines/import/barcode/{barcode}
-     */
-    @PostMapping("/import/barcode/{barcode}")
-    public ResponseEntity<WineDTO> importWineByBarcode(@PathVariable String barcode) {
-        logger.info("POST /api/wines/import/barcode/{} - Importando vino", barcode);
-        WineDTO importedWine = importExternalWinesUseCase.importByBarcode(barcode);
-        
-        if (importedWine != null) {
-            return ResponseEntity.ok(importedWine);
-        }
-        return ResponseEntity.notFound().build();
-    }
-    
-    // ==================== ARCHIVO LOCAL (File I/O) ====================
-    
-    /**
-     * Lee vinos desde un archivo local (CSV).
-     * GET /api/wines/file?path=ruta/al/archivo.csv
-     * Ejemplo: GET /api/wines/file?path=src/main/resources/wines.csv
-     */
-    @GetMapping("/file")
-    public ResponseEntity<List<WineDTO>> readWinesFromFile(@RequestParam String path) {
-        logger.info("GET /api/wines/file?path={}", path);
-        
-        try {
-            // Crear el adapter de archivo (infraestructura)
-            ExternalWineProvider fileProvider = new FileWineProvider(path);
-            
-            // Usar el método de preview para solo leer
-            List<WineDTO> wines = fileProvider.fetchWines().stream()
-                .map(WineDTO::fromDomain)
-                .toList();
-            
-            return ResponseEntity.ok(wines);
-            
-        } catch (Exception e) {
-            logger.error("Error al leer archivo: {}", path, e);
-            return ResponseEntity.badRequest().build();
-        }
+        logger.info("POST /api/wines/import - Importando todos los vinos externos");
+        return ResponseEntity.ok(importExternalWinesUseCase.importAllWines());
     }
 }
